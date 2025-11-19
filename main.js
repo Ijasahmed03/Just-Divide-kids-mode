@@ -42,6 +42,8 @@ this.load.image("hintIcon", "assets/hint.png");
     // --- Data structures that we will use later ---
   this.gridSlots = [];
   this.gridSize = 4;
+  this.hintHighlights = [];
+
  this.bestScore = Number(localStorage.getItem("bestScore") || 0);
   // --- Build UI layout ---
   this.createHeader();
@@ -78,7 +80,6 @@ this.load.image("hintIcon", "assets/hint.png");
 
   this.keepValue = null;
   this.trashUses = 3;
-
   this.score = 0;
   this.level = 1;
 
@@ -86,8 +87,8 @@ this.load.image("hintIcon", "assets/hint.png");
   this.levelText.setText("LEVEL " + this.level);
   this.scoreText.setText("SCORE " + this.score); // will hook to localStorage later
   this.trashCountText.setText("x " + this.trashUses);
-    if (this.bestText) {
-    this.bestText.setText("Best: " + this.bestScore);
+    if (this.besScoretText) {
+    this.bestScoreText.setText("Best: " + this.bestScore);
   }
 }
 updateUpcomingTexts() {
@@ -166,26 +167,34 @@ this.hintButton.on("pointerup", () => {
  
 }
 showHint() {
-  if (this.isPaused) return; // optional: disable hint while paused
+  if (this.isPaused) return;
+  if (!this.activeTile) return;
 
-  // Example: a fading message
-  const hint = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 250,
-    "Try matching numbers that divide evenly!",
-    {
-      fontFamily: "KongaNext",
-      fontSize: "34px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 6
-    }
-  ).setOrigin(0.5).setDepth(30);
+  // Clear previous hints
+  this.clearHintHighlights();
 
-  this.tweens.add({
-    targets: hint,
-    alpha: 0,
-    duration: 2000,
-    delay: 1500,
-    onComplete: () => hint.destroy()
+  const hintIndices = this.computeHintIndicesForActiveTile();
+  if (hintIndices.length === 0) {
+    return; // no valid merges for this tile
+  }
+
+  // Use same size as grid cells (110 in your createGrid)
+  const size = 110;
+
+  hintIndices.forEach((idx) => {
+    const slot = this.gridSlots[idx];
+    const rect = this.add.rectangle(
+      slot.x,
+      slot.y,
+      size,
+      size,
+      0xffffff,
+      0.2   // semi-transparent white fill
+    )
+      .setStrokeStyle(5, 0xfff176) // soft yellow outline
+      .setDepth(3);
+
+    this.hintHighlights.push(rect);
   });
 }
 
@@ -523,7 +532,10 @@ handleTilePlaced(index, tileObject) {
   // Store in grid
   this.gridValues[index] = tileObject.tileValue;
   this.gridTiles[index]  = tileObject;
-
+   this.clearHintHighlights(); 
+ // Store in grid
+  this.gridValues[index] = tileObject.tileValue;
+  this.gridTiles[index]  = tileObject;
   if (this.activeTile === tileObject) {
     this.activeTile = null;
   }
@@ -541,10 +553,12 @@ handleTilePlaced(index, tileObject) {
   this.spawnActiveTile();
 }
 handleTrashDrop(tileObject) {
+    this.clearHintHighlights();
   if (this.trashUses <= 0) {
     // No uses left → just return tile to stack
     tileObject.x = this.stackTopPos.x;
     tileObject.y = this.stackTopPos.y;
+    
     return;
   }
 
@@ -595,6 +609,57 @@ checkGameOver() {
   // No space, no merges → game over
   return true;
 }
+canMergeValues(a, b) {
+  if (a == null || b == null) return false;
+
+  if (a === b) return true;
+
+  const big = Math.max(a, b);
+  const small = Math.min(a, b);
+  if (small === 0) return false;
+
+  return big % small === 0;  // divisible merge
+}
+
+computeHintIndicesForActiveTile() {
+  const indices = [];
+
+  if (!this.activeTile) return indices;
+
+  const value = this.activeTile.tileValue;
+  if (value == null) return indices;
+
+  for (let i = 0; i < this.gridSlots.length; i++) {
+    // Only empty cells
+    if (this.gridValues[i] !== null) continue;
+
+    const neighbors = this.getNeighborIndices(i);
+    let canMergeHere = false;
+
+    for (const nIdx of neighbors) {
+      const nVal = this.gridValues[nIdx];
+      if (nVal == null) continue;
+
+      if (this.canMergeValues(value, nVal)) {
+        canMergeHere = true;
+        break;
+      }
+    }
+
+    if (canMergeHere) {
+      indices.push(i);
+    }
+  }
+
+  return indices;
+}
+
+clearHintHighlights() {
+  if (!this.hintHighlights) return;
+  this.hintHighlights.forEach(h => h.destroy());
+  this.hintHighlights = [];
+}
+
 showGameOver() {
    // Stop timer
   if (this.timerEvent) {
@@ -654,32 +719,33 @@ showGameOver() {
 }
 
 updateScoreAndLevelUI() {
-  const prevLevel = this.level;                          // old level
-  const newLevel = Math.floor(this.score / 10) + 1;      // <-- define it
+  const prevLevel = this.level;
+  const newLevel  = Math.floor(this.score / 10) + 1;  // every 10 points
 
-  // Level up → grant more trash uses
+  // If level increased, grant extra trash uses
   if (newLevel > prevLevel) {
-    const gained = (newLevel - prevLevel) * 2;   // e.g. +2 trash per level
-   this.trashUses += gained;
-this.trashCountText.setText("x " + this.trashUses);
-
+    const gained = (newLevel - prevLevel) * 2; // +2 trash per level
+    this.trashUses += gained;
+    this.trashCountText.setText("x " + this.trashUses);
   }
 
   this.level = newLevel;
   this.levelText.setText("LEVEL " + this.level);
 
-  // Best score
- if (this.score > this.bestScore) {
-  this.bestScore = this.score;
-  localStorage.setItem("bestScore", this.bestScore);
+  // Best score logic
+  if (this.score > this.bestScore) {
+    this.bestScore = this.score;
+    localStorage.setItem("bestScore", this.bestScore);
 
-  // Update UI instantly
-  if (this.bestScoreText) {
-    this.bestScoreText.setText(String(this.bestScore));
+    if (this.bestScoreText) {
+      this.bestScoreText.setText(String(this.bestScore));
+    }
   }
+
+  // Score label in red box
+  this.scoreText.setText("SCORE " + this.score);
 }
 
-}
 
 updateTimerText() {
   const minutes = Math.floor(this.elapsedSeconds / 60);
@@ -788,6 +854,7 @@ updateKeepVisual() {
 
 
 handleKeepDrop(tileObject) {
+  this.clearHintHighlights(); 
   // No tile stored yet -> store this one, consume from queue
   if (this.keepValue === null) {
     this.keepValue = tileObject.tileValue;
@@ -886,8 +953,8 @@ tryMergeOnce(index) {
       this.destroyTileAt(index);
       this.destroyTileAt(nIdx);
 
-      this.score += 1;
-      return { merged: true, newIndex: null }; // no tile left at this cell
+      this.score += 1;   // add 1 point
+      return { merged: true, newIndex: null }; // no tile left here
     }
 
     // 2) Divisible tiles -> big / small (whole number)
@@ -903,14 +970,14 @@ tryMergeOnce(index) {
       smallVal = value;
     }
 
-    if (bigVal % smallVal === 0) {
+    if (smallVal !== 0 && bigVal % smallVal === 0) {
       const result = bigVal / smallVal;
 
       // Remove smaller tile
       this.destroyTileAt(smallIdx);
 
       if (result === 1) {
-        // Result is 1 -> remove big tile as well
+        // Result 1 -> remove big tile as well
         this.destroyTileAt(bigIdx);
         this.score += 1;
         return { merged: true, newIndex: null };
@@ -931,6 +998,7 @@ tryMergeOnce(index) {
   // No neighbor caused a merge
   return { merged: false, newIndex: index };
 }
+
 isPointInRect(x, y, rect) {
   const halfW = rect.width / 2;
   const halfH = rect.height / 2;
