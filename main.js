@@ -15,7 +15,7 @@ class MainScene extends Phaser.Scene {
 
   preload() {
      this.add.text(0, 0, ".", {
-    fontFamily: "Killjoy",
+    fontFamily: "killjoy",
     fontSize: "1px",
   }).setAlpha(0);
   this.load.image("bg","assets/background.png");
