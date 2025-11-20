@@ -15,7 +15,7 @@ class MainScene extends Phaser.Scene {
 
   preload() {
      this.add.text(0, 0, ".", {
-    fontFamily: "killjoy",
+    fontFamily: "Killjoy",
     fontSize: "1px",
   }).setAlpha(0);
   this.load.image("bg","assets/background.png");
@@ -104,7 +104,7 @@ updateUpcomingTexts() {
   createHeader() {
   // Title
   this.add.text(GAME_WIDTH / 2, 50, "JUST DIVIDE", {
-    fontFamily: "killjoy",
+    fontFamily: "Killjoy",
     fontSize: "46px",
     fontStyle: "bold",
     letterSpacing: 4,
@@ -112,7 +112,7 @@ updateUpcomingTexts() {
   }).setOrigin(0.5);
  // Center timer under title
 this.headerTimerText = this.add.text(GAME_WIDTH / 2, 95, "⏳ 00:00", {
-  fontFamily: "killjoy",
+  fontFamily: "Killjoy",
   fontSize: "22px",
   color: "#111"
 }).setOrigin(0.5);
